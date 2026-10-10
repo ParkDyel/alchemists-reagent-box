@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "extract": "node index.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  },
+  "type": "module"
+}

@@ -1,6 +1,5 @@
 packages:
-  - cr3tojpeg
-  - heicToPng
+  - convert
   - unzipAllZip
 
 allowBuilds:

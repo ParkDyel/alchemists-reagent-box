@@ -1,0 +1,15 @@
+{
+  "name": "@private-lib/convert",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "convert": "node index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "exiftool-vendored": "^29.3.0",
+    "fast-glob": "^3.3.3",
+    "heic-convert": "^2.1.0",
+    "sharp": "^0.34.5"
+  }
+}

@@ -19,9 +19,10 @@ export function parseArguments(args) {
     quality = Number(values.quality);
   }
   const [requestedFormat, ...inputs] = positionals;
-  const format = normalizeFormat(requestedFormat);
-  if (!format || inputs.length === 0) {
+  const requestedFormats = requestedFormat?.split('|').map(value => value.trim()) ?? [];
+  const normalizedFormats = requestedFormats.map(normalizeFormat);
+  if (normalizedFormats.length === 0 || normalizedFormats.some(format => !format) || inputs.length === 0) {
     throw new Error('출력 형식과 입력 경로를 지정하세요.');
   }
-  return { format, inputs, quality };
+  return { formats: [...new Set(normalizedFormats)], inputs, quality };
 }

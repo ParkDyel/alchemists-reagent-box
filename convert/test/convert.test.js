@@ -135,7 +135,7 @@ test('parses quality before and after paths, supports --quality, and rejects inv
     ['jpg', 'photo.jpg', '--quality=85'],
   ]) {
     const parsed = parseArguments(args);
-    assert.equal(parsed.format, 'jpeg');
+    assert.deepEqual(parsed.formats, ['jpeg']);
     assert.deepEqual(parsed.inputs, ['photo.jpg']);
     assert.ok([0, 85, 100].includes(parsed.quality));
   }
@@ -144,6 +144,55 @@ test('parses quality before and after paths, supports --quality, and rejects inv
   }
   assert.throws(() => parseArguments(['jpg', 'photo.jpg', '-q']));
   assert.throws(() => parseArguments(['jpg', 'photo.jpg', '--unknown']));
+});
+
+test('validates pipe-separated formats and deduplicates aliases before conversion', () => {
+  assert.deepEqual(parseArguments(['JPG|jpeg| png |tif|TIFF', 'photo.cr3']).formats, ['jpeg', 'png', 'tiff']);
+  for (const formats of ['jpg|', '|png', 'jpg||png', 'jpg|unknown']) {
+    assert.throws(() => parseArguments([formats, 'photo.cr3']));
+  }
+});
+
+test('creates multiple formats for every input with quality and metadata preserved', async t => {
+  const directory = await fixture(t);
+  await image(path.join(directory, 'a.png'));
+  await image(path.join(directory, 'nested', 'b.png'));
+  const tool = new ExifTool();
+  t.after(() => tool.end());
+  for (const file of ['a.png', 'nested/b.png']) {
+    await tool.write(path.join(directory, file), { 'EXIF:Make': 'Canon', 'EXIF:Model': 'Multi-format Test' }, {
+      writeArgs: ['-overwrite_original'],
+    });
+  }
+  const result = run(directory, 'jpg|jpeg|png', '-q', '95', '.');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /4개 성공/);
+  assert.match(result.stdout, /PNG는 무손실/);
+  for (const [folder, name] of [['', 'a'], ['nested', 'b']]) {
+    const outputDirectory = path.join(directory, folder, 'out');
+    assert.deepEqual((await fs.readdir(outputDirectory)).sort(), [`${name}.jpg`, `${name}.png`]);
+    for (const extension of ['jpg', 'png']) {
+      const output = path.join(outputDirectory, `${name}.${extension}`);
+      const metadata = await sharp(await fs.readFile(output)).metadata();
+      assert.equal(metadata.format, extension === 'jpg' ? 'jpeg' : extension);
+      const tags = await tool.readRaw(output);
+      assert.equal(tags.Make, 'Canon', JSON.stringify({ output, tags }));
+      assert.equal(tags.Model, 'Multi-format Test');
+    }
+  }
+});
+
+test('attempts remaining formats after an output failure', async t => {
+  const directory = await fixture(t);
+  const source = path.join(directory, 'source.png');
+  await image(source);
+  // 출력 실패는 기존 out 경로를 일반 파일로 막아서 발생시킵니다.
+  await fs.writeFile(path.join(directory, 'out'), 'blocked directory');
+  const result = run(directory, 'jpg|png', source);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /\(jpeg\)/);
+  assert.match(result.stderr, /\(png\)/);
+  assert.match(result.stdout, /0개 성공, 2개 오류/);
 });
 
 test('accepts quality endpoints in every lossy encoder, changes JPEG quality, and leaves PNG pixels lossless', async t => {

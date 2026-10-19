@@ -6,6 +6,7 @@
 pnpm install
 pnpm convert jpg "D:\photos\raw"
 pnpm convert jpg -q 95 "D:\photos\raw"
+pnpm convert "jpg|png" -q 95 "D:\photos\raw"
 pnpm convert webp -q 85 "D:\photos\heic"
 pnpm convert png "./photos/**/*.{cr3,CR3,heic,HEIC}" "./other/photo.jpg"
 pnpm unzipAllZip "D:\photos\zip"
@@ -27,6 +28,7 @@ pnpm sleepSort 10
 
 - 입력: CR3, HEIC/HEIF, JPEG, PNG, WebP, AVIF, TIFF, GIF. 확장자의 대소문자를 구분하지 않습니다.
 - 출력: `jpg`/`jpeg`, `png`, `webp`, `avif`, `tif`/`tiff`. GIF 등 여러 프레임이 있는 입력은 첫 이미지 한 장을 변환합니다.
+- 여러 출력 형식은 `"jpg|png"`, `"jpg|png|webp"`처럼 `|`로 구분합니다. 셸이 파이프로 해석하지 않도록 반드시 따옴표로 감싸세요. 각 원본에서 요청한 형식별 결과를 생성하고, `jpg|jpeg`처럼 같은 형식의 별칭은 한 번만 처리합니다. `-q`는 요청한 형식 전체에 적용되며 PNG에서는 무시합니다. 한 형식이 실패해도 나머지는 계속 처리하고, 성공 횟수는 생성한 결과 파일 수입니다.
 - 폴더를 지정하면 모든 하위 폴더의 지원 이미지를 탐색합니다.
 - glob은 `"./photos/**/*"`, `"./photos/**/*.HEIC"`처럼 따옴표로 감쌉니다. 패턴 자체의 대소문자는 구분하므로 혼합 확장자는 `*.{heic,HEIC}`처럼 지정하세요.
 - 폴더·glob 탐색에서는 `out`, `node_modules`, `.git` 폴더와 심볼릭 링크를 통한 폴더 탐색을 제외합니다. 중복으로 선택된 파일은 한 번만 처리합니다.
@@ -59,3 +61,9 @@ pnpm sleepSort 10
 변환기와 ZIP 추출 테스트는 루트에서 `pnpm test`로 실행합니다.
 
 PowerShell 실행 정책 때문에 `pnpm.ps1` 실행이 차단되면 같은 명령을 `pnpm.cmd`로 실행할 수 있습니다.
+
+Windows PowerShell에서 `pnpm.cmd`로 여러 형식을 지정할 때는 내부 CMD에도 큰따옴표가 전달되도록 다음처럼 작성합니다.
+
+```powershell
+pnpm.cmd convert '"jpg|png"' -q 95 "D:\photos\raw"
+```

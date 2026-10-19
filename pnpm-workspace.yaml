@@ -1,0 +1,7 @@
+packages:
+  - cr3tojpeg
+  - heicToPng
+  - unzipAllZip
+
+allowBuilds:
+  sharp: true

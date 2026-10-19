@@ -1,0 +1,12 @@
+{
+  "name": "private-lib",
+  "private": true,
+  "scripts": {
+    "cr3tojpeg": "pnpm --dir cr3tojpeg run convert",
+    "heicToPng": "pnpm --dir heicToPng run convert",
+    "unzipAllZip": "pnpm --dir unzipAllZip run extract",
+    "grabOutFiles": "node grabOutFiles/index.js",
+    "sleepSort": "node sleepSort/index.js",
+    "test": "pnpm --dir unzipAllZip test"
+  }
+}

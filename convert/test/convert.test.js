@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import sharp from 'sharp';
+import { ExifTool } from 'exiftool-vendored';
 import { collectInputs } from '../inputs.js';
-import { createConverter } from '../converter.js';
+import { createConverter, saveOutput } from '../converter.js';
+import { parseArguments } from '../arguments.js';
 
 // libvips의 파일 캐시가 Windows 임시 파일 정리를 막지 않도록 합니다.
 sharp.cache(false);
@@ -73,9 +75,23 @@ test('supports quoted globstar, uppercase extensions, and Windows pattern separa
   assert.match(result.stdout, /2개 성공/);
 });
 
-test('produces all output formats and applies EXIF orientation', async t => {
+test('preserves EXIF, GPS, XMP, IPTC and ICC while correcting orientation and dimensions in every output format', async t => {
   const directory = await fixture(t);
-  await image(path.join(directory, 'portrait.png'), 6);
+  const source = path.join(directory, 'portrait.png');
+  await image(source, 6);
+  const tool = new ExifTool();
+  t.after(() => tool.end());
+  await tool.write(source, {
+    Make: 'Test Camera', Model: 'Archive Test',
+    DateTimeOriginal: '2024:05:06 07:08:09',
+    GPSLatitude: 37.5, GPSLongitude: 127.0,
+    'XMP-dc:Title': 'Photo title',
+    'XMP-tiff:Orientation': 6,
+    'XMP-tiff:ImageWidth': 12, 'XMP-tiff:ImageHeight': 8,
+    'IPTC:Keywords': ['travel', 'family'],
+  }, { writeArgs: ['-overwrite_original'] });
+  const original = await fs.readFile(source);
+  const sourceProfile = (await sharp(original).metadata()).icc;
   for (const [argument, extension, format] of [
     ['jpg', 'jpg', 'jpeg'], ['JPEG', 'jpg', 'jpeg'], ['png', 'png', 'png'],
     ['webp', 'webp', 'webp'], ['avif', 'avif', 'heif'],
@@ -83,11 +99,116 @@ test('produces all output formats and applies EXIF orientation', async t => {
   ]) {
     const result = run(directory, argument, 'portrait.png');
     assert.equal(result.status, 0, `${argument}: ${result.stderr}`);
-    const metadata = await sharp(path.join(directory, 'out', `portrait.${extension}`)).metadata();
+    const output = path.join(directory, 'out', `portrait.${extension}`);
+    const metadata = await sharp(await fs.readFile(output)).metadata();
     assert.equal(metadata.format, format);
     assert.equal(metadata.width, 8);
     assert.equal(metadata.height, 12);
     assert.ok(metadata.orientation === undefined || metadata.orientation === 1);
+    assert.deepEqual(metadata.icc, sourceProfile);
+    const tags = await tool.readRaw(output, ['-n', '-G1']);
+    assert.equal(tags['IFD0:Make'], 'Test Camera');
+    assert.equal(tags['IFD0:Model'], 'Archive Test');
+    assert.equal(tags['ExifIFD:DateTimeOriginal'], '2024:05:06 07:08:09');
+    assert.equal(tags['GPS:GPSLatitude'], 37.5);
+    assert.equal(tags['GPS:GPSLongitude'], 127);
+    assert.equal(tags['XMP-dc:Title'], 'Photo title');
+    if (['webp', 'heif'].includes(format)) {
+      // WebP/AVIF는 IPTC IIM 블록을 지원하지 않으며 XMP는 별도로 유지됩니다.
+      assert.equal(tags['IPTC:Keywords'], undefined, format);
+    } else {
+      assert.deepEqual(tags['IPTC:Keywords'], ['travel', 'family'], format);
+    }
+    assert.equal(tags['XMP-tiff:Orientation'], 1);
+    assert.equal(tags['XMP-tiff:ImageWidth'], 8);
+    assert.equal(tags['XMP-tiff:ImageHeight'], 12);
+    assert.equal(tags['ExifIFD:ExifImageWidth'], 8);
+    assert.equal(tags['ExifIFD:ExifImageHeight'], 12);
+  }
+  assert.deepEqual(await fs.readFile(source), original);
+});
+
+test('parses quality before and after paths, supports --quality, and rejects invalid options', () => {
+  for (const args of [
+    ['jpg', '-q', '0', 'photo.jpg'],
+    ['-q', '100', 'jpg', 'photo.jpg'],
+    ['jpg', 'photo.jpg', '--quality=85'],
+  ]) {
+    const parsed = parseArguments(args);
+    assert.equal(parsed.format, 'jpeg');
+    assert.deepEqual(parsed.inputs, ['photo.jpg']);
+    assert.ok([0, 85, 100].includes(parsed.quality));
+  }
+  for (const value of ['-1', '101', '1.5', 'abc', '', 'NaN', 'Infinity']) {
+    assert.throws(() => parseArguments(['jpg', 'photo.jpg', `--quality=${value}`]));
+  }
+  assert.throws(() => parseArguments(['jpg', 'photo.jpg', '-q']));
+  assert.throws(() => parseArguments(['jpg', 'photo.jpg', '--unknown']));
+});
+
+test('accepts quality endpoints in every lossy encoder, changes JPEG quality, and leaves PNG pixels lossless', async t => {
+  const directory = await fixture(t);
+  const input = path.join(directory, 'detail.png');
+  const pixels = Buffer.from(Array.from({ length: 64 * 48 * 3 }, (_, i) => (i * 31 + Math.floor(i / 17) * 19) % 256));
+  await sharp(pixels, { raw: { width: 64, height: 48, channels: 3 } }).png().toFile(input);
+  const converter = createConverter();
+  try {
+    for (const format of ['jpeg', 'webp', 'avif', 'tiff']) {
+      const low = await converter.convert(input, format, 0);
+      const high = await converter.convert(input, format, 100);
+      assert.equal((await sharp(low).metadata()).width, 64);
+      assert.equal((await sharp(high).metadata()).height, 48);
+      assert.notDeepEqual(low, high, `${format}: quality must affect encoding`);
+      if (format === 'jpeg') assert.ok(high.length > low.length);
+    }
+    const png = await converter.convert(input, 'png', 0);
+    assert.deepEqual(await sharp(png).raw().toBuffer(), pixels);
+  } finally {
+    await converter.close();
+  }
+  const result = run(directory, 'jpg', '-q', '95', 'detail.png');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal((await sharp(await fs.readFile(path.join(directory, 'out', 'detail.jpg'))).metadata()).format, 'jpeg');
+  const pngResult = run(directory, 'png', 'detail.png', '-q', '0');
+  assert.equal(pngResult.status, 0, pngResult.stderr);
+  assert.match(pngResult.stdout, /PNG는 무손실/);
+});
+
+test('restores metadata from CR3 and HEIC source paths rather than metadata-free decoder buffers', async t => {
+  const directory = await fixture(t);
+  const tool = new ExifTool();
+  t.after(() => tool.end());
+  const decoded = await sharp({ create: {
+    width: 12, height: 8, channels: 3, background: '#ff0000',
+  } }).png().toBuffer();
+  for (const extension of ['cr3', 'heic']) {
+    const input = path.join(directory, `original.${extension}`);
+    const container = path.join(directory, 'source.png');
+    // 원본 메타데이터 경로를 검증하기 위해 PNG 컨테이너를 소스로 사용하고 디코더만 대체합니다.
+    await fs.writeFile(container, decoded);
+    await tool.write(container, { Model: 'Source metadata', DateTimeOriginal: '2024:05:06 07:08:09' }, {
+      writeArgs: ['-overwrite_original'],
+    });
+    await fs.rename(container, input);
+    const converter = createConverter({
+      decodeHeic: async () => decoded,
+      exiftool: {
+        extractBinaryTagToBuffer: async () => decoded,
+        read: (...args) => tool.read(...args),
+        write: (...args) => tool.write(...args),
+        end: async () => {},
+      },
+    });
+    try {
+      const buffer = await converter.convert(input, 'jpeg', 95);
+      const output = await saveOutput(input, 'jpeg', buffer);
+      await converter.preserveMetadata(input, output);
+      const tags = await tool.readRaw(output);
+      assert.equal(tags.Model, 'Source metadata', extension);
+      assert.equal(tags.DateTimeOriginal, '2024:05:06 07:08:09', extension);
+    } finally {
+      await converter.close();
+    }
   }
 });
 

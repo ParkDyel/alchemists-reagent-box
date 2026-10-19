@@ -5,7 +5,8 @@
 ```powershell
 pnpm install
 pnpm convert jpg "D:\photos\raw"
-pnpm convert webp "D:\photos\heic"
+pnpm convert jpg -q 95 "D:\photos\raw"
+pnpm convert webp -q 85 "D:\photos\heic"
 pnpm convert png "./photos/**/*.{cr3,CR3,heic,HEIC}" "./other/photo.jpg"
 pnpm unzipAllZip "D:\photos\zip"
 pnpm sleepSort 10
@@ -13,7 +14,7 @@ pnpm sleepSort 10
 
 | 루트 명령 | 실행 내용 |
 | --- | --- |
-| `pnpm convert <출력 형식> <경로...>` | 통합 이미지 변환기: 파일·폴더·glob을 여러 개 지정 가능 |
+| `pnpm convert <출력 형식> [-q 0~100] <경로...>` | 통합 이미지 변환기: 파일·폴더·glob을 여러 개 지정 가능 |
 | `pnpm cr3tojpeg <경로...>` | `pnpm convert jpeg`의 호환 명령 |
 | `pnpm heicToPng <경로...>` | `pnpm convert webp`의 호환 명령 |
 | `pnpm unzipAllZip <폴더>` | `unzipAllZip`의 `extract`: ZIP에서 HEIC 추출 후 처리한 ZIP 삭제 |
@@ -30,10 +31,26 @@ pnpm sleepSort 10
 - glob은 `"./photos/**/*"`, `"./photos/**/*.HEIC"`처럼 따옴표로 감쌉니다. 패턴 자체의 대소문자는 구분하므로 혼합 확장자는 `*.{heic,HEIC}`처럼 지정하세요.
 - 폴더·glob 탐색에서는 `out`, `node_modules`, `.git` 폴더와 심볼릭 링크를 통한 폴더 탐색을 제외합니다. 중복으로 선택된 파일은 한 번만 처리합니다.
 - 각 원본 폴더의 `out`에 저장합니다. 예: `photos/trip/a.CR3` → `photos/trip/out/a.jpg`. 이름이 겹치거나 기존 결과가 있으면 `a-1.jpg`, `a-2.jpg`처럼 번호를 붙입니다. 원본과 기존 결과는 덮어쓰지 않습니다.
-- CR3는 RAW 현상 대신 카메라가 저장한 내장 JPEG를 추출해 변환하며, 원본 방향 정보를 적용합니다. 일반 이미지도 EXIF 방향을 적용합니다. 출력 파일의 메타데이터는 제거됩니다.
+- CR3는 RAW 현상 대신 카메라가 저장한 내장 JPEG를 추출해 변환하며, 원본 방향 정보를 적용합니다. 일반 이미지도 EXIF 방향을 적용합니다.
+- 원본에서 대상 형식이 지원하는 메타데이터(EXIF 촬영일·카메라·GPS, XMP, IPTC, ICC 프로파일 등)를 복사합니다. CR3·HEIC도 중간 변환본이 아닌 원본에서 복사합니다. 방향은 `1`(정상 방향), 이미지 크기는 변환 결과에 맞게 갱신하고 원본의 미리보기 이미지는 복사하지 않습니다. 형식별 지원 차이로 모든 제조사 전용 태그를 보장하지는 않습니다. 메타데이터 복사가 실패하면 이번에 만든 결과를 삭제하고 실패로 처리합니다.
+- WebP·AVIF는 IPTC IIM 블록을 지원하지 않으므로 해당 블록은 복사되지 않습니다. 이 형식에서도 원본에 있는 XMP는 유지됩니다.
 - 입력별로 이미지가 없거나 변환이 실패하면 오류를 출력하고 나머지 파일을 계속 처리합니다. 오류가 하나라도 있으면 종료 코드는 `1`입니다.
 
 `pnpm convert --help`로 사용법을 볼 수 있습니다. 기존 `cr3tojpeg`, `heicToPng` 명령도 통합 변환기에 연결되며, 이제 경로는 루트 기준이고 폴더 내 모든 지원 이미지가 대상입니다.
+
+### 품질
+
+`-q 95` 또는 `--quality 95`처럼 0~100 정수를 지정합니다. 옵션은 출력 형식·경로 앞뒤에 둘 수 있습니다. 생략하면 기존 기본값을 사용합니다.
+
+| 형식 | 기본값 | `-q` 처리 |
+| --- | --- | --- |
+| JPEG | 80 | 인코딩 품질. 100도 무손실을 의미하지 않습니다. |
+| WebP | 85 | near-lossless 품질. 기존 `nearLossless: true`, `effort: 6` 유지 |
+| AVIF | 50 | 인코딩 품질 |
+| TIFF | 80 | TIFF 내부 JPEG 압축의 품질 |
+| PNG | 무손실 | `-q`를 무시하고 안내를 출력합니다. 색상 수를 줄이지 않습니다. |
+
+인코더가 1~100을 지원하므로 `-q 0`은 최저 품질인 1로 처리합니다. 형식마다 품질 숫자의 의미가 달라 같은 숫자로 화질을 비교할 수 없습니다. 이 옵션은 입력을 복원하거나 CR3를 RAW 현상하는 옵션이 아닙니다.
 
 `unzipAllZip`은 해당 패키지 폴더에서 실행되므로 입력 폴더를 절대 경로로 지정하는 것을 권장합니다.
 

@@ -30,7 +30,7 @@ export function createConverter({ exiftool, decodeHeic = heicConvert } = {}) {
   let tool = exiftool;
 
   return {
-    async convert(inputPath, format) {
+    async convert(inputPath, format, quality) {
       const extension = path.extname(inputPath).toLowerCase();
       let image;
       if (extension === '.cr3') {
@@ -51,7 +51,29 @@ export function createConverter({ exiftool, decodeHeic = heicConvert } = {}) {
       const options = format === 'webp'
         ? { quality: 85, effort: 6, nearLossless: true }
         : {};
-      return image.toFormat(format, options).toBuffer();
+      if (quality !== undefined && format !== 'png') {
+        // sharp 인코더의 quality 허용 범위는 1~100입니다.
+        options.quality = Math.max(1, quality);
+      }
+      return image.keepMetadata().toFormat(format, options).toBuffer();
+    },
+    async preserveMetadata(inputPath, outputPath) {
+      tool ??= new ExifTool();
+      const { width, height } = await sharp(await fs.readFile(outputPath)).metadata();
+      const result = await tool.write(outputPath, {}, {
+        writeArgs: [
+          '-overwrite_original',
+          '-TagsFromFile', inputPath,
+          '-all:all', '-ICC_Profile',
+          '--Orientation', '--ImageWidth', '--ImageHeight',
+          '--ExifImageWidth', '--ExifImageHeight',
+          '--ThumbnailImage', '--PreviewImage', '--JpgFromRaw',
+          '-Orientation#=1', '-XMP-tiff:Orientation#=1',
+          `-ExifImageWidth=${width}`, `-ExifImageHeight=${height}`,
+          `-XMP-tiff:ImageWidth=${width}`, `-XMP-tiff:ImageHeight=${height}`,
+        ],
+      });
+      return result.warnings ?? [];
     },
     async close() {
       if (tool) await tool.end();

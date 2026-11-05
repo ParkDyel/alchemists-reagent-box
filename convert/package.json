@@ -1,5 +1,5 @@
 {
-  "name": "@private-lib/convert",
+  "name": "@alchemists-reagent-box/convert",
   "private": true,
   "type": "module",
   "scripts": {

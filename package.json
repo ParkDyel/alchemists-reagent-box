@@ -1,5 +1,5 @@
 {
-  "name": "private-lib",
+  "name": "alchemists-reagent-box",
   "private": true,
   "scripts": {
     "convert": "node convert/index.js",

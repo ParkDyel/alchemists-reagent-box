@@ -7,6 +7,7 @@ export function parseArguments(args) {
     allowPositionals: true,
     options: {
       quality: { type: 'string', short: 'q' },
+      resize: { type: 'string', short: 'r' },
       help: { type: 'boolean', short: 'h' },
     },
   });
@@ -18,11 +19,23 @@ export function parseArguments(args) {
     }
     quality = Number(values.quality);
   }
+  let scale;
+  if (values.resize !== undefined) {
+    const match = /^(\d+(?:\.\d+)?)(?:\/(\d+(?:\.\d+)?))?$/.exec(values.resize);
+    scale = match ? Number(match[1]) / Number(match[2] ?? 1) : NaN;
+    if (!Number.isFinite(scale) || scale <= 0 || scale >= 1) {
+      throw new Error('축소 비율(-r)은 0보다 크고 1보다 작아야 합니다.');
+    }
+  }
   const [requestedFormat, ...inputs] = positionals;
   const requestedFormats = requestedFormat?.split('|').map(value => value.trim()) ?? [];
   const normalizedFormats = requestedFormats.map(normalizeFormat);
-  if (normalizedFormats.length === 0 || normalizedFormats.some(format => !format) || inputs.length === 0) {
-    throw new Error('출력 형식과 입력 경로를 지정하세요.');
+  if (inputs.length > 0 && normalizedFormats.every(Boolean)) {
+    return { formats: [...new Set(normalizedFormats)], inputs, quality, scale };
   }
-  return { formats: [...new Set(normalizedFormats)], inputs, quality };
+  if (scale !== undefined && positionals.length > 0) {
+    if (quality !== undefined) throw new Error('품질(-q)을 사용하려면 출력 형식을 지정하세요.');
+    return { inputs: positionals, scale };
+  }
+  throw new Error('입력 경로와 출력 형식 또는 축소 옵션(-r)을 지정하세요.');
 }

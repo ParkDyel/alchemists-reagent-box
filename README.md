@@ -9,15 +9,16 @@ pnpm convert jpg -q 95 "D:\photos\raw"
 pnpm convert "jpg|png" -q 95 "D:\photos\raw"
 pnpm convert webp -q 85 "D:\photos\heic"
 pnpm convert png "./photos/**/*.{cr3,CR3,heic,HEIC}" "./other/photo.jpg"
+pnpm convert -r 1/3 "C:\Users\bluet\Documents\Darktable"
+pnpm convert webp --resize 0.4 -q 85 "D:\photos\heic"
 pnpm unzipAllZip "D:\photos\zip"
 pnpm sleepSort 10
 ```
 
 | 루트 명령 | 실행 내용 |
 | --- | --- |
-| `pnpm convert <출력 형식> [-q 0~100] <경로...>` | 통합 이미지 변환기: 파일·폴더·glob을 여러 개 지정 가능 |
-| `pnpm cr3tojpeg <경로...>` | `pnpm convert jpeg`의 호환 명령 |
-| `pnpm heicToPng <경로...>` | `pnpm convert webp`의 호환 명령 |
+| `pnpm convert <출력 형식> [-q <품질>] [-r <비율>] <경로...>` | 이미지 변환 및 선택적 축소 |
+| `pnpm convert -r <비율> <경로...>` | PNG·JPEG·TIFF 이미지를 원본 형식으로 축소 |
 | `pnpm unzipAllZip <폴더>` | `unzipAllZip`의 `extract`: ZIP에서 HEIC 추출 후 처리한 ZIP 삭제 |
 | `pnpm grabOutFiles` | `grabOutFiles/index.js`: 코드에 지정된 `D:/1`의 파일을 `D:/2`로 이동 |
 | `pnpm sleepSort <숫자>` | `sleepSort/index.js` 실행 |
@@ -38,7 +39,12 @@ pnpm sleepSort 10
 - WebP·AVIF는 IPTC IIM 블록을 지원하지 않으므로 해당 블록은 복사되지 않습니다. 이 형식에서도 원본에 있는 XMP는 유지됩니다.
 - 입력별로 이미지가 없거나 변환이 실패하면 오류를 출력하고 나머지 파일을 계속 처리합니다. 오류가 하나라도 있으면 종료 코드는 `1`입니다.
 
-`pnpm convert --help`로 사용법을 볼 수 있습니다. 기존 `cr3tojpeg`, `heicToPng` 명령도 통합 변환기에 연결되며, 이제 경로는 루트 기준이고 폴더 내 모든 지원 이미지가 대상입니다.
+CR3만 JPEG로, HEIC/HEIF만 WebP로 변환하려면 확장자를 지정합니다. `pnpm convert --help`로 사용법을 볼 수 있습니다.
+
+```powershell
+pnpm convert jpeg "./photos/**/*.{cr3,CR3}"
+pnpm convert webp "./photos/**/*.{heic,HEIC,heif,HEIF}"
+```
 
 ### 품질
 
@@ -53,6 +59,16 @@ pnpm sleepSort 10
 | PNG | 무손실 | `-q`를 무시하고 안내를 출력합니다. 색상 수를 줄이지 않습니다. |
 
 인코더가 1~100을 지원하므로 `-q 0`은 최저 품질인 1로 처리합니다. 형식마다 품질 숫자의 의미가 달라 같은 숫자로 화질을 비교할 수 없습니다. 이 옵션은 입력을 복원하거나 CR3를 RAW 현상하는 옵션이 아닙니다.
+
+## 이미지 축소
+
+`-r` 또는 `--resize`에 0보다 크고 1보다 작은 비율을 지정합니다. `1/3`, `0.4`, `2/5`처럼 분수와 소수를 모두 사용할 수 있습니다. 가로세로 비율을 유지하며 크기는 픽셀 단위로 반올림합니다.
+
+- `pnpm convert -r 1/3 "./photos"`는 PNG·JPEG·TIFF를 같은 형식으로 저장합니다. 16비트 PNG/TIFF의 깊이와 ICC 프로파일을 유지하며, 일부 EXIF/XMP 크기 태그는 원본 값을 유지할 수 있습니다.
+- `pnpm convert webp -r 1/3 -q 85 "./photos"`는 지원하는 입력을 축소하면서 WebP로 변환하고, 메타데이터의 크기와 방향을 결과에 맞게 갱신합니다. `-q`는 출력 형식을 지정할 때 사용할 수 있습니다.
+- `pnpm convert --help`에서 두 가지 사용법과 예시를 확인할 수 있습니다.
+
+## 기타 도구
 
 `unzipAllZip`은 해당 패키지 폴더에서 실행되므로 입력 폴더를 절대 경로로 지정하는 것을 권장합니다.
 

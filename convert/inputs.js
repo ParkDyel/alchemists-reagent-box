@@ -7,7 +7,7 @@ const extensions = new Set([
   '.avif', '.tif', '.tiff', '.gif',
 ]);
 
-export async function collectInputs(inputs, cwd = process.cwd()) {
+export async function collectInputs(inputs, cwd = process.cwd(), supportedExtensions = extensions) {
   const files = new Map();
   const errors = [];
   const options = {
@@ -33,7 +33,7 @@ export async function collectInputs(inputs, cwd = process.cwd()) {
         matches = await glob(input.replaceAll('\\', '/'), options);
       }
 
-      const images = matches.filter(file => extensions.has(path.extname(file).toLowerCase()));
+      const images = matches.filter(file => supportedExtensions.has(path.extname(file).toLowerCase()));
       if (images.length === 0) {
         errors.push(`지원하는 이미지가 없습니다: ${input}`);
       }

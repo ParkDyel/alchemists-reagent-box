@@ -26,19 +26,41 @@ function orient(image, orientation) {
   }
 }
 
+function resizeImage(image, metadata, scale, orientation = metadata.orientation) {
+  const { width, height } = metadata;
+  if (!width || !height) throw new Error('이미지 크기를 확인할 수 없습니다.');
+  const swapped = orientation >= 5 && orientation <= 8;
+  const targetWidth = Math.max(1, Math.round((swapped ? height : width) * scale));
+  const targetHeight = Math.max(1, Math.round((swapped ? width : height) * scale));
+  return image.resize(targetWidth, targetHeight, { fit: 'inside', withoutEnlargement: true });
+}
+
 export function createConverter({ exiftool, decodeHeic = heicConvert } = {}) {
   let tool = exiftool;
 
   return {
-    async convert(inputPath, format, quality) {
+    async resize(inputPath, scale) {
+      const image = sharp(inputPath).autoOrient();
+      const metadata = await image.metadata();
+      const { format } = metadata;
+      resizeImage(image, metadata, scale).keepMetadata();
+      if (metadata.bitsPerSample === 16 && (format === 'png' || format === 'tiff')) {
+        image.toColourspace('rgb16');
+      }
+      const options = format === 'tiff' ? { compression: 'lzw' } : {};
+      return { buffer: await image.toFormat(format, options).toBuffer(), format };
+    },
+    async convert(inputPath, format, quality, scale) {
       const extension = path.extname(inputPath).toLowerCase();
       let image;
+      let orientation;
       if (extension === '.cr3') {
         tool ??= new ExifTool();
         const preview = await tool.extractBinaryTagToBuffer('JpgFromRaw', inputPath);
         const tags = await tool.read(inputPath, { numericTags: ['Orientation'] });
         // 원본 CR3의 방향을 한 번만 적용합니다. 미리보기 자체의 EXIF는 무시합니다.
-        image = orient(sharp(preview), tags.Orientation);
+        orientation = tags.Orientation ?? 1;
+        image = orient(sharp(preview), orientation);
       } else if (extension === '.heic' || extension === '.heif') {
         const buffer = await decodeHeic({
           buffer: await fs.readFile(inputPath), format: 'PNG', quality: 1,
@@ -47,6 +69,7 @@ export function createConverter({ exiftool, decodeHeic = heicConvert } = {}) {
       } else {
         image = sharp(inputPath).autoOrient();
       }
+      if (scale !== undefined) resizeImage(image, await image.metadata(), scale, orientation);
 
       const options = format === 'webp'
         ? { quality: 85, effort: 6, nearLossless: true }

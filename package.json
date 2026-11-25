@@ -3,8 +3,7 @@
   "private": true,
   "scripts": {
     "convert": "node convert/index.js",
-    "unzipAllZip": "pnpm --dir unzipAllZip run extract",
-    "grabOutFiles": "node grabOutFiles/index.js",
+    "extractZips": "node unzipAllZip/index.js",
     "sleepSort": "node sleepSort/index.js",
     "test": "pnpm --dir convert test && pnpm --dir unzipAllZip test"
   }

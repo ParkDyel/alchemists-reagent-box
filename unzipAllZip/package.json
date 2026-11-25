@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "extract": "node index.js",
+    "extractZips": "node index.js",
     "test": "node --test"
   },
   "dependencies": {

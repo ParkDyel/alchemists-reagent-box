@@ -11,7 +11,7 @@ pnpm convert webp -q 85 "D:\photos\heic"
 pnpm convert png "./photos/**/*.{cr3,CR3,heic,HEIC}" "./other/photo.jpg"
 pnpm convert -r 1/3 "C:\Users\bluet\Documents\Darktable"
 pnpm convert webp --resize 0.4 -q 85 "D:\photos\heic"
-pnpm unzipAllZip "D:\photos\zip"
+pnpm extractZips "D:\photos\zip"
 pnpm sleepSort 10
 ```
 
@@ -19,8 +19,7 @@ pnpm sleepSort 10
 | --- | --- |
 | `pnpm convert <출력 형식> [-q <품질>] [-r <비율>] <경로...>` | 이미지 변환 및 선택적 축소 |
 | `pnpm convert -r <비율> <경로...>` | PNG·JPEG·TIFF 이미지를 원본 형식으로 축소 |
-| `pnpm unzipAllZip <폴더>` | `unzipAllZip`의 `extract`: ZIP에서 HEIC 추출 후 처리한 ZIP 삭제 |
-| `pnpm grabOutFiles` | `grabOutFiles/index.js`: 코드에 지정된 `D:/1`의 파일을 `D:/2`로 이동 |
+| `pnpm extractZips <폴더>` | 하위 폴더까지 ZIP을 찾아 각 ZIP이 있던 폴더에 파일을 풀고 처리한 ZIP 삭제 |
 | `pnpm sleepSort <숫자>` | `sleepSort/index.js` 실행 |
 
 ## 이미지 변환
@@ -70,11 +69,11 @@ pnpm convert webp "./photos/**/*.{heic,HEIC,heif,HEIF}"
 
 ## 기타 도구
 
-`unzipAllZip`은 해당 패키지 폴더에서 실행되므로 입력 폴더를 절대 경로로 지정하는 것을 권장합니다.
+`pnpm extractZips <폴더>`는 지정한 폴더와 모든 하위 폴더에서 `.zip` 파일을 찾습니다. 확장자의 대소문자를 구분하지 않으며, 심볼릭 링크는 건너뜁니다. ZIP 안의 모든 파일을 폴더 구조 없이 그 ZIP이 있던 폴더에 바로 저장합니다. 같은 이름이 이미 있으면 `photo-1.jpg`처럼 번호를 붙입니다.
 
-`grabOutFiles`는 실행 전에 소스 코드에 지정된 원본·대상 경로를 확인하세요. 파일을 이동하고 비워진 원본 폴더를 삭제합니다.
+파일을 모두 저장한 ZIP은 삭제합니다. 처리에 실패하면 해당 ZIP은 남기고 이번에 그 ZIP에서 만든 파일을 정리한 뒤 나머지 ZIP을 계속 처리합니다. 폴더 탐색이나 ZIP 처리에 실패하면 종료 코드는 `1`입니다.
 
-변환기와 ZIP 추출 테스트는 루트에서 `pnpm test`로 실행합니다.
+이미지 변환과 ZIP 추출 테스트는 루트에서 `pnpm test`로 실행합니다.
 
 PowerShell 실행 정책 때문에 `pnpm.ps1` 실행이 차단되면 같은 명령을 `pnpm.cmd`로 실행할 수 있습니다.
 
